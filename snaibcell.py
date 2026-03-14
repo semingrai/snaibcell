@@ -15,7 +15,7 @@ df = pd.read_csv("data_cleaned_version.csv")
 y = df["total_procedure_time_min"]
 
 FEATURES = [
-    # Original
+    # Original columns
     "age", "gender", "bmi", "nihss_score", "gcs_score",
     "systolic_bp", "blood_glucose", "oxygen_saturation",
     "inr", "hemoglobin", "creatinine", "clot_location",
@@ -24,7 +24,7 @@ FEATURES = [
     "hypertension", "diabetes", "atrial_fibrillation", "prior_stroke",
     "smoking_history", "onset_to_door_min", "door_to_ct_min",
     "ct_to_puncture_min", "tpa_given", "interventionist_experience_years",
-    # Engineered
+    # Engineered columns
     "arrvial_imaging_efficiency", "brain_reserve", "age_adjusted_penumbra",
     "age_weighted_core", "aspects_penumbra_interaction", "cerebral_oxygen_reserve",
     "metabolic_infarct_burden", "hemorrhagic_risk", "oxygen_per_deficit",
