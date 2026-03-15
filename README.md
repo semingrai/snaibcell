@@ -7,7 +7,7 @@ Snaibcell is a pre-operative clinical decision support tool that predicts the sa
 
 ---
 
-## The Problem
+## The Problem 
 Surgeons currently rely on experience and general guidelines to determine how long they can safely operate during stroke thrombectomy. There is no patient-specific, data-driven tool to predict the safe surgical window before irreversible neurological deterioration begins — and every extra minute matters.
 
 ---
