@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 import os
 from openai import OpenAI
 from test_data import test_patients, test_predictions
+from concurrent.futures import ThreadPoolExecutor
 load_dotenv()
 
 client = OpenAI(
