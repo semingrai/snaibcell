@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 import os
 from openai import OpenAI
 from test_data import test_patients, test_predictions
+from concurrent.futures import ThreadPoolExecutor
 load_dotenv()
 
 client = OpenAI(
@@ -27,12 +28,13 @@ def generate_communication(patient_data, prediction_output):
 Generate a clinical brief for the attending physician.
 
 PATIENT DATA:
-- Age: {patient_data['age']}, Gender: {patient_data['gender']}
-- NIHSS Score: {patient_data['nihss_score']} 
+- NIHSS Score: {patient_data['nihss_score']}
 - ASPECTS Score: {patient_data['aspects_score']}
 - Clot Location: {patient_data['clot_location']}
-- Penumbra Volume: {patient_data['penumbra_volume_ml']}ml
+- Systolic BP: {patient_data['systolic_bp']}
+- Blood Glucose: {patient_data['blood_glucose']}
 - Core Infarct: {patient_data['core_infarct_volume_ml']}ml
+- Penumbra Volume: {patient_data['penumbra_volume_ml']}ml
 - Onset to Door: {patient_data['onset_to_door_min']} minutes
 
 PREDICTION OUTPUT:
@@ -41,12 +43,14 @@ PREDICTION OUTPUT:
 - Urgency Tier: {prediction_output['urgency_tier']}
 - Top Risk Factors: {prediction_output['top_features']}
 
+Identify any clinically abnormal values from the patient data above.
+
 OUTPUT FORMAT:
-1. Urgency tier and recommended door-to-puncture target
-2. Key biomarkers driving this prediction
-3. tPA consideration given time math
-4. One specific watchpoint for this patient profile
-5. Estimated outcome range if treated within window
+1. Abnormal values detected
+2. Urgency tier and recommended door-to-puncture target
+3. Key biomarkers driving this prediction
+4. tPA consideration given time math
+5. One specific watchpoint for this patient profile
 
 Maximum 100 words. Clinical language."""
 
@@ -75,12 +79,24 @@ CONSTRAINTS:
 - Maximum 150 words total
 - End with one sentence the family can hold onto"""
 
-    return {
-        "technical_brief": call_featherless(technical_prompt),
-        "family_letter": call_featherless(family_prompt),
-    }
+    # Run both calls in parallel
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        technical_future = executor.submit(call_featherless, technical_prompt)
+        family_future = executor.submit(call_featherless, family_prompt)
+        
+        return {
+            "technical_brief": technical_future.result(),
+            "family_letter": family_future.result()
+        }
     
 if __name__ == "__main__":
-    result = generate_communication(test_patients["critical"], test_predictions["critical"])
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--patient", default="critical", choices=["critical", "moderate", "favorable"])
+    args = parser.parse_args()
+
+    result = generate_communication(test_patients[args.patient], test_predictions[args.patient])
+    print("TECHNICAL BRIEF:")
     print(result["technical_brief"])
+    print("\nFAMILY LETTER:")
     print(result["family_letter"])
