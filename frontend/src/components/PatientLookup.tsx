@@ -120,10 +120,10 @@ export default function PatientLookup({ isDark, onSelect, onTriage, extraPatient
   const textareaBg  = isDark ? "bg-dark-input border-dark-border" : "bg-gray-100 border-gray-300";
 
   return (
-    <div className={`flex flex-1 gap-5 p-6 overflow-hidden ${bg}`}>
+    <div className={`flex flex-col lg:flex-row flex-1 gap-5 p-4 lg:p-6 overflow-y-auto lg:overflow-hidden ${bg}`}>
 
       {/* ── Column 1: Patient Management ── */}
-      <div className="w-64 flex-shrink-0 flex flex-col gap-3">
+      <div className="w-full lg:w-64 flex-shrink-0 flex flex-col gap-3">
 
         {/* Add by ID */}
         <div className={`flex flex-col gap-4 rounded border p-5 ${surface} ${border}`}>
@@ -193,7 +193,7 @@ export default function PatientLookup({ isDark, onSelect, onTriage, extraPatient
       </div>
 
       {/* ── Column 2: Current Patients ── */}
-      <div className="w-52 flex-shrink-0 flex flex-col gap-3">
+      <div className="w-full lg:w-52 flex-shrink-0 flex flex-col gap-3">
         <h2 className={`text-sm font-semibold ${textPrimary}`}>Current Patients</h2>
         <div className="flex flex-col gap-2 overflow-y-auto">
           {allChips.map(chip => {

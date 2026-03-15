@@ -47,11 +47,11 @@ export default function PatientStrip({ patient, prediction, isDark, onNewPatient
   ]
 
   return (
-    <div className={`flex items-center justify-between h-[88px] px-10 border-b shrink-0 ${surface} ${border}`}>
+    <div className={`flex flex-wrap items-center justify-between min-h-[72px] lg:h-[88px] px-4 lg:px-10 py-3 lg:py-0 gap-y-2 border-b shrink-0 ${surface} ${border}`}>
       {/* Stat cards */}
-      <div className="flex items-center h-full">
+      <div className="flex flex-wrap items-center gap-y-2">
         {stats.map((s, i) => (
-          <div key={s.label} className="flex items-center h-full">
+          <div key={s.label} className="flex items-center">
             {i > 0 && <div className={`w-px h-10 mx-0 ${divider}`} />}
             <div className={`flex flex-col gap-1 justify-center ${i === 0 ? 'pr-7' : 'px-7'}`}>
               <span className={`text-[10px] font-semibold tracking-widest ${textM}`}>{s.label}</span>

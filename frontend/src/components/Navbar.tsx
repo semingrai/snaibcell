@@ -23,7 +23,7 @@ export default function Navbar({ title, isDark, onToggleDark, showTimer, elapsed
     : null
 
   return (
-    <nav className={`flex items-center h-14 px-6 border-b shrink-0
+    <nav className={`flex items-center h-14 px-4 md:px-6 border-b shrink-0
       ${isDark ? 'bg-dark-surface border-dark-border' : 'bg-white border-gray-200'}`}>
       {/* Logo */}
       <div className="flex items-center gap-2 mr-6">
@@ -66,7 +66,7 @@ export default function Navbar({ title, isDark, onToggleDark, showTimer, elapsed
       </button>
 
       {/* Clock */}
-      <span className={`font-mono text-xs ml-4 ${isDark ? 'text-txt-muted' : 'text-gray-400'}`}>
+      <span className={`hidden sm:block font-mono text-xs ml-4 ${isDark ? 'text-txt-muted' : 'text-gray-400'}`}>
         {fmtTime}
       </span>
     </nav>

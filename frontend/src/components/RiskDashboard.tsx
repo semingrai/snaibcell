@@ -63,11 +63,11 @@ export default function RiskDashboard({
       />
 
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
         {/* Left / centre panel */}
-        <div className="flex flex-col gap-7 flex-1 px-12 py-9 overflow-y-auto">
+        <div className="flex flex-col gap-7 flex-1 px-4 sm:px-8 lg:px-12 py-6 lg:py-9 overflow-y-auto">
           {/* Chart header */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className={`text-base font-semibold ${textP}`}>
               Outcome Risk vs Procedure Duration
             </h2>
@@ -93,7 +93,7 @@ export default function RiskDashboard({
 
         {/* Right panel */}
         <aside
-          className={`w-[380px] shrink-0 flex flex-col p-8 border-l overflow-y-auto ${rp} ${rpBdr}`}
+          className={`w-full lg:w-[380px] shrink-0 flex flex-col p-5 lg:p-8 border-t lg:border-t-0 lg:border-l overflow-y-auto ${rp} ${rpBdr}`}
         >
           <RiskFactors
             patient={patient}
