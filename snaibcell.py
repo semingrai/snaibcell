@@ -7,15 +7,19 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
 from xgboost import XGBRegressor
 
+import pickle as _pickle
+import os as _os
 
-# ── 1. Train ──────────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 1. Load dataset
+# ──────────────────────────────────────────────────────────────────────────────
 
 df = pd.read_csv("data_cleaned_version.csv")
 
 y = df["total_procedure_time_min"]
 
 FEATURES = [
-    # Original columns
     "age", "gender", "bmi", "nihss_score", "gcs_score",
     "systolic_bp", "blood_glucose", "oxygen_saturation",
     "inr", "hemoglobin", "creatinine", "clot_location",
@@ -24,7 +28,6 @@ FEATURES = [
     "hypertension", "diabetes", "atrial_fibrillation", "prior_stroke",
     "smoking_history", "onset_to_door_min", "door_to_ct_min",
     "ct_to_puncture_min", "tpa_given", "interventionist_experience_years",
-    # Engineered columns
     "arrvial_imaging_efficiency", "brain_reserve", "age_adjusted_penumbra",
     "age_weighted_core", "aspects_penumbra_interaction", "cerebral_oxygen_reserve",
     "metabolic_infarct_burden", "hemorrhagic_risk", "oxygen_per_deficit",
@@ -38,57 +41,114 @@ FEATURES = [
 ]
 FEATURES = [c for c in FEATURES if c in df.columns]
 
-X = df[FEATURES]
+X = df[FEATURES].copy()
 
-categorical_cols = [c for c in X.columns if X[c].dtype == "object"]
-numerical_cols   = [c for c in X.columns if c not in categorical_cols]
 
-preprocessor = ColumnTransformer(transformers=[
-    ("num", SimpleImputer(strategy="median"), numerical_cols),
-    ("cat", Pipeline(steps=[
-        ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
-    ]), categorical_cols),
+# ──────────────────────────────────────────────────────────────────────────────
+# 2. Explicitly define categorical columns
+# ──────────────────────────────────────────────────────────────────────────────
+
+FORCED_CATEGORICAL = [
+    "gender",
+    "clot_location",
+    "smoking_history",
+    "tpa_given",
+]
+
+# Ensure they exist
+FORCED_CATEGORICAL = [c for c in FORCED_CATEGORICAL if c in X.columns]
+
+# Force them to string dtype
+for col in FORCED_CATEGORICAL:
+    X[col] = X[col].astype("string")
+
+# Now detect remaining categorical columns
+categorical_cols = list(set(
+    [c for c in X.columns if X[c].dtype == "object" or X[c].dtype.name == "string"]
+))
+
+numerical_cols = [c for c in X.columns if c not in categorical_cols]
+
+# Force numeric columns to numeric
+for col in numerical_cols:
+    X[col] = pd.to_numeric(X[col], errors="coerce")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 3. Preprocessing
+# ──────────────────────────────────────────────────────────────────────────────
+
+numeric_transformer = Pipeline(steps=[
+    ("imputer", SimpleImputer(strategy="median"))
 ])
+
+categorical_transformer = Pipeline(steps=[
+    ("imputer", SimpleImputer(strategy="most_frequent")),
+    ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+])
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ("num", numeric_transformer, numerical_cols),
+        ("cat", categorical_transformer, categorical_cols),
+    ]
+)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 4. Model
+# ──────────────────────────────────────────────────────────────────────────────
 
 model = Pipeline(steps=[
     ("preprocess", preprocessor),
     ("model", XGBRegressor(
-        n_estimators=400, learning_rate=0.05, max_depth=4,
-        subsample=0.8, colsample_bytree=0.8, min_child_weight=3,
-        objective="reg:squarederror", n_jobs=-1, random_state=0,
+        n_estimators=400,
+        learning_rate=0.05,
+        max_depth=4,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        min_child_weight=3,
+        objective="reg:squarederror",
+        n_jobs=-1,
+        random_state=0,
     )),
 ])
 
 model.fit(X, y)
 
 
-# ── 1.5. Export ───────────────────────────────────────────────────────────────
-import pickle as _pickle, os as _os
+# ──────────────────────────────────────────────────────────────────────────────
+# 5. Save model
+# ──────────────────────────────────────────────────────────────────────────────
 
-def predict_duration(patient_dict: dict) -> dict:
-    """Predict procedure duration for a single patient dict of raw features."""
-    row = pd.DataFrame([patient_dict])
-    row = row.reindex(columns=FEATURES)
-    pred = float(model.predict(row)[0])
-    safe = float(max(pred - 20, 10))
-    return {"predicted_duration_min": round(pred), "safe_duration_min": round(safe)}
+_model_save_path = _os.path.join(
+    _os.path.dirname(_os.path.abspath(__file__)),
+    "snaibcell_model.pkl"
+)
 
-_model_save_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "snaibcell_model.pkl")
 with open(_model_save_path, "wb") as _fh:
     _pickle.dump({"model": model, "features": FEATURES}, _fh)
+
 print(f"[snaibcell] Model saved → {_model_save_path}")
 
 
-# ── 2. Predict from upload ────────────────────────────────────────────────────
-# FILE FROM THE WEB
-patient_df = pd.read_csv('testing_data/green_patient.csv')
-X_input    = patient_df.reindex(columns=FEATURES)
-predicted  = model.predict(X_input)
-safe       = np.maximum(predicted - 20, 10)
+# ──────────────────────────────────────────────────────────────────────────────
+# 6. Predict on green_patient.csv
+# ──────────────────────────────────────────────────────────────────────────────
 
+patient_df = pd.read_csv("testing_data/green_patient.csv")
+
+# Apply same dtype forcing
+for col in FORCED_CATEGORICAL:
+    if col in patient_df.columns:
+        patient_df[col] = patient_df[col].astype("string")
+
+X_input = patient_df.reindex(columns=FEATURES)
+
+predicted = model.predict(X_input)
+safe = np.maximum(predicted - 20, 10)
 
 results = patient_df[["patient_id"]].copy() if "patient_id" in patient_df.columns else pd.DataFrame()
 results["predicted_duration_min"] = predicted.round(1)
-results["safe_duration_min"]      = safe.round(1)
+results["safe_duration_min"] = safe.round(1)
 results.to_csv("results.csv", index=False)

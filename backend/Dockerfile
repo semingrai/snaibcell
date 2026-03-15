@@ -7,16 +7,17 @@ RUN pip install --no-cache-dir \
     fastapi uvicorn xgboost scikit-learn pandas numpy \
     python-dotenv openai pydantic
 
-# Copy project root (for snaibcell.py + CSVs + model output)
+# Copy everything needed for training
 COPY snaibcell.py data_cleaned_version.csv stroke_thrombectomy_dataset.csv ./
 COPY testing_data/ ./testing_data/
 
 # Copy backend source
 COPY backend/ ./backend/
 
-# Train the model (produces snaibcell_model.pkl at /app/)
-# Script crashes after saving due to dead code — verify pkl exists instead
-RUN python snaibcell.py || test -f snaibcell_model.pkl
+# Train the model — fails loudly if pkl not produced
+RUN python snaibcell.py && \
+    test -f snaibcell_model.pkl && \
+    echo "[docker] snaibcell_model.pkl confirmed at $(pwd)/snaibcell_model.pkl"
 
 EXPOSE 8000
 
