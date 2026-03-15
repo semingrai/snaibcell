@@ -1,3 +1,9 @@
+export interface Pod {
+  id: string
+  name: string
+  patientIds: string[]
+}
+
 export interface PatientData {
   patient_id: string
   age: number

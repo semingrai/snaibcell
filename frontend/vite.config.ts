@@ -9,6 +9,7 @@ export default defineConfig({
       "/clinical-brief": "http://localhost:8000",
       "/chat": "http://localhost:8000",
       "/triage": "http://localhost:8000",
+      "/demo-patients": "http://localhost:8000",
     },
   },
 })

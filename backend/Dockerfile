@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir \
 
 # Copy project root (for snaibcell.py + CSVs + model output)
 COPY snaibcell.py data_cleaned_version.csv stroke_thrombectomy_dataset.csv ./
+COPY testing_data/ ./testing_data/
 
 # Copy backend source
 COPY backend/ ./backend/

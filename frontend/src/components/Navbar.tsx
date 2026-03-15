@@ -5,11 +5,12 @@ interface Props {
   title: string
   isDark: boolean
   onToggleDark: () => void
+  onHome: () => void
   showTimer?: boolean
   elapsedMin?: number
 }
 
-export default function Navbar({ title, isDark, onToggleDark, showTimer, elapsedMin }: Props) {
+export default function Navbar({ title, isDark, onToggleDark, onHome, showTimer, elapsedMin }: Props) {
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
@@ -26,7 +27,7 @@ export default function Navbar({ title, isDark, onToggleDark, showTimer, elapsed
     <nav className={`flex items-center h-14 px-4 md:px-6 border-b shrink-0
       ${isDark ? 'bg-dark-surface border-dark-border' : 'bg-white border-gray-200'}`}>
       {/* Logo */}
-      <div className="flex items-center gap-2 mr-6">
+      <button onClick={onHome} className="flex items-center gap-2 mr-6 cursor-pointer">
         <div className="w-7 h-7 rounded-md bg-gradient-to-br from-blue-700 to-blue-950 flex items-center justify-center">
           <Activity size={14} className="text-brand-lblue" />
         </div>
@@ -34,7 +35,7 @@ export default function Navbar({ title, isDark, onToggleDark, showTimer, elapsed
           ${isDark ? 'text-txt-primary' : 'text-gray-900'}`}>
           SNAIBCELL
         </span>
-      </div>
+      </button>
 
       {/* Divider */}
       <div className={`w-px h-5 mr-6 ${isDark ? 'bg-dark-border' : 'bg-gray-200'}`} />

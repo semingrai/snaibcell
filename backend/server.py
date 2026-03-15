@@ -1,6 +1,8 @@
 import re
 import json
 import math
+import glob
+import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,7 +15,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["POST"],
+    allow_methods=["*"],
     allow_headers=["Content-Type"],
 )
 
@@ -125,35 +127,77 @@ def chat(req: ChatRequest):
 
 # ── /triage ───────────────────────────────────────────────────────────────────
 
+_CLINICAL_KEYWORDS = {
+    # symptoms
+    "weakness", "paralysis", "hemiplegia", "hemiparesis", "aphasia", "dysarthria",
+    "slurred", "speech", "facial", "droop", "numbness", "tingling", "vision",
+    "headache", "dizzy", "dizziness", "vertigo", "nausea", "vomiting",
+    "unconscious", "unresponsive", "confused", "lethargic", "seizure", "stroke",
+    # demographics
+    "male", "female", "man", "woman", "year", "old", "yo", "y/o", "patient",
+    "obese", "diabetic", "hypertensive",
+    # vitals / scores
+    "bp", "blood", "pressure", "pulse", "hr", "glucose", "oxygen", "sat",
+    "nihss", "gcs", "aspects", "inr",
+    # clinical
+    "history", "hypertension", "diabetes", "afib", "atrial", "fibrillation",
+    "onset", "symptom", "deficit", "mca", "ica", "basilar", "artery", "clot",
+    "tpa", "thrombectomy", "ischemic", "hemorrhagic", "ct", "mri",
+    # weight/size (common in descriptions)
+    "lb", "lbs", "kg", "bmi", "overweight",
+}
+
+def _is_clinical(text: str) -> bool:
+    lower = text.lower()
+    words = set(re.findall(r"[a-z]+", lower))
+    has_number = bool(re.search(r"\d", text))
+    has_keyword = bool(words & _CLINICAL_KEYWORDS)
+    long_enough = len(text.strip()) >= 15
+    # Must have length + (a number AND a keyword, or multiple keywords)
+    keyword_count = len(words & _CLINICAL_KEYWORDS)
+    return long_enough and (has_number and has_keyword or keyword_count >= 2)
+
+
 @app.post("/triage")
 def triage(req: TriageRequest):
     global _triage_counter
+
+    if not _is_clinical(req.description):
+        raise HTTPException(
+            status_code=422,
+            detail="Please describe a real patient — include clinical details like age, symptoms, or vitals."
+        )
+
     _triage_counter += 1
     counter = _triage_counter
 
-    prompt = f"""You are an emergency stroke triage AI in an interventional neurology unit.
-A doctor described this incoming patient:
+    system_prompt = f"""You are SNAIBCELL, a strict clinical stroke triage AI deployed exclusively in interventional neurology units. You process input from licensed medical professionals only.
 
-"{req.description}"
+IDENTITY RULES — never break these:
+- You are a medical triage tool. You do not chat, answer questions, or respond to non-clinical input.
+- You do not greet, explain yourself, or acknowledge the user personally.
+- If the input is not a legitimate clinical patient description, you output ONLY this exact JSON and nothing else:
+  {{"error": "NOT_CLINICAL"}}
+- A valid input must describe a real or hypothetical patient with at least one of: neurological symptoms, age/demographics with a medical context, vital signs, or a clinical finding.
+- Greetings, names, test strings, questions, and anything without patient clinical context → output {{"error": "NOT_CLINICAL"}}
+- When uncertain whether input is clinical → output {{"error": "NOT_CLINICAL"}}
 
-Reason through the clinical presentation and estimate all values below.
-Be CONSERVATIVE — when uncertain, assume worse outcomes to protect patient safety.
+INVALID EXAMPLES (always return the error JSON):
+- "hi my name is ryan"
+- "test"
+- "hello"
+- "what does this do"
+- Any sentence with no medical/clinical content
 
-REASONING GUIDELINES:
-- "Unresponsive", "unconscious", low GCS, or "found down" → NIHSS 20-35, urgency RED
-- "Weakness", "hemiplegia", "paralysis" on one side → NIHSS 12-20, likely MCA-M1
-- "Speech difficulty" or "aphasia" alone → NIHSS 5-10, urgency YELLOW
-- "Facial droop" alone → NIHSS 4-8
-- Age > 65 → increase NIHSS estimate by 3, reduce independence_prob by 10%
-- Obese / weight > 250 lbs / BMI > 35 → increase predicted_duration_min by 15, add cardiovascular risk
-- Systolic BP > 180 → urgency RED, reduce time_window_minutes by 20
-- Unknown onset time → set onset_to_door_min to 60
-- When urgency is uncertain → default to RED
+VALID EXAMPLES (proceed with full triage JSON):
+- "68yo male, sudden right arm weakness, slurred speech, BP 185/110"
+- "300lb woman unresponsive, found down, last seen normal 2 hours ago"
+- "65 year old with left sided hemiplegia and facial droop, NIHSS around 14"
 
-Output ONLY a valid JSON object. No markdown, no explanation, no code fences.
+If valid, output ONLY a valid JSON object with these fields. No markdown, no explanation, no code fences:
 
 {{
-  "patient_id": "TRIAGE-{counter:03d}",
+  "patient_id": "P{counter:03d}",
   "age": <integer>,
   "gender": "<Male|Female|Unknown>",
   "nihss_score": <0-42>,
@@ -183,20 +227,28 @@ Output ONLY a valid JSON object. No markdown, no explanation, no code fences.
     {{"label": "<key clinical factor with value>", "direction": "up", "weight": <30-85>}},
     {{"label": "<key clinical factor with value>", "direction": "<up|down>", "weight": <20-70>}}
   ]
-}}"""
+}}
+
+CLINICAL REASONING GUIDELINES (only apply when input is valid):
+- "Unresponsive", "unconscious", low GCS, or "found down" → NIHSS 20-35, urgency RED
+- "Weakness", "hemiplegia", "paralysis" on one side → NIHSS 12-20, likely MCA-M1
+- "Speech difficulty" or "aphasia" alone → NIHSS 5-10, urgency YELLOW
+- "Facial droop" alone → NIHSS 4-8
+- Age > 65 → increase NIHSS estimate by 3, reduce independence_prob by 10%
+- Obese / weight > 250 lbs / BMI > 35 → increase predicted_duration_min by 15
+- Systolic BP > 180 → urgency RED, reduce time_window_minutes by 20
+- Unknown onset time → set onset_to_door_min to 60
+- When urgency uncertain → default to RED"""
 
     try:
         response = fl_client.chat.completions.create(
             model="aaditya/Llama3-OpenBioLLM-70B",
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are an emergency stroke triage AI. Output ONLY a valid JSON object. No markdown fences, no explanation, no text before or after the JSON.",
-                },
-                {"role": "user", "content": prompt},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": req.description},
             ],
             max_tokens=900,
-            temperature=0.2,
+            temperature=0.1,
         )
         raw = response.choices[0].message.content.strip()
     except Exception as e:
@@ -216,6 +268,10 @@ Output ONLY a valid JSON object. No markdown, no explanation, no code fences.
         data = json.loads(json_str)
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=502, detail=f"JSON parse error: {e}")
+
+    if data.get("error") == "NOT_CLINICAL":
+        _triage_counter -= 1
+        raise HTTPException(status_code=422, detail="Please describe a real patient — include clinical details like age, symptoms, or vitals.")
 
     def gi(key, default):
         try:
@@ -241,7 +297,7 @@ Output ONLY a valid JSON object. No markdown, no explanation, no code fences.
         urgency = "RED"
 
     patient = {
-        "patient_id": f"TRIAGE-{counter:03d}",
+        "patient_id": f"P{counter:03d}",
         "age": gi("age", 60),
         "gender": str(data.get("gender", "Unknown")),
         "nihss_score": gi("nihss_score", 15),
@@ -279,3 +335,86 @@ Output ONLY a valid JSON object. No markdown, no explanation, no code fences.
     }
 
     return {"patient": patient, "prediction": prediction}
+
+
+# ── /demo-patients ─────────────────────────────────────────────────────────────
+
+@app.get("/demo-patients")
+def demo_patients():
+    data_dir = os.path.join(os.path.dirname(__file__), "..", "testing_data")
+    results = []
+
+    for path in sorted(glob.glob(os.path.join(data_dir, "*.csv"))):
+        import pandas as pd
+        df = pd.read_csv(path)
+        for _, row in df.iterrows():
+            d = row.to_dict()
+
+            raw_id = str(d.get("patient_id", "T000"))
+            pid = raw_id.replace("ST_", "T_")
+
+            nihss   = int(d.get("nihss_score", 15))
+            gcs     = int(d.get("gcs_score", 12))
+            aspects = int(d.get("aspects_score", 7))
+
+            if nihss >= 25 or gcs <= 8 or aspects <= 3:
+                urgency = "RED"
+            elif nihss >= 15 or gcs <= 11 or aspects <= 6:
+                urgency = "YELLOW"
+            else:
+                urgency = "GREEN"
+
+            independence_prob = max(5, min(95, 100 - nihss * 2 - (10 - aspects) * 2))
+            predicted_mrs = 4 if nihss >= 25 else 3 if nihss >= 15 else 2 if nihss >= 5 else 1
+            time_window = {"RED": 45, "YELLOW": 90, "GREEN": 120}[urgency]
+
+            ml = _ml_predict_duration(d)
+            pred_duration = ml["predicted_duration_min"] if ml else 90
+            safe_duration = ml["safe_duration_min"] if ml else 70
+
+            base_bad = max(0, min(99, 100 - independence_prob))
+            max_bad  = min(99, base_bad + 28)
+
+            gender_raw = d.get("gender", 1)
+            gender = "Male" if str(gender_raw) == "1" else "Female"
+
+            patient = {
+                "patient_id": pid,
+                "age": int(d.get("age", 60)),
+                "gender": gender,
+                "nihss_score": nihss,
+                "gcs_score": gcs,
+                "aspects_score": aspects,
+                "clot_location": str(d.get("clot_location", "MCA-M1")),
+                "clot_length_mm": float(d.get("clot_length_mm", 10.0)),
+                "penumbra_volume_ml": float(d.get("penumbra_volume_ml", 50.0)),
+                "core_infarct_volume_ml": float(d.get("core_infarct_volume_ml", 8.0)),
+                "mismatch_ratio": float(d.get("mismatch_ratio", 6.0)),
+                "systolic_bp": int(d.get("systolic_bp", 160)),
+                "blood_glucose": int(d.get("blood_glucose", 110)),
+                "onset_to_door_min": int(d.get("onset_to_door_min", 60)),
+                "hypertension": int(d.get("hypertension", 0)),
+                "diabetes": int(d.get("diabetes", 0)),
+                "atrial_fibrillation": int(d.get("atrial_fibrillation", 0)),
+                "interventionist_experience_years": float(d.get("interventionist_experience_years", 5.0)),
+            }
+
+            prediction = {
+                "predicted_mrs": predicted_mrs,
+                "independence_prob": independence_prob,
+                "urgency_tier": urgency,
+                "time_window_minutes": time_window,
+                "mrs_plain_english": ["no significant disability", "slight disability", "moderate disability", "moderate-severe disability", "severe disability"][predicted_mrs],
+                "predicted_duration_min": pred_duration,
+                "safe_duration_min": safe_duration,
+                "top_features": [
+                    {"label": f"NIHSS Score ({nihss})", "direction": "up", "weight": min(99, nihss * 2)},
+                    {"label": f"ASPECTS Score ({aspects})", "direction": "up" if aspects < 7 else "down", "weight": abs(aspects - 10) * 8},
+                    {"label": str(d.get("clot_location", "MCA-M1")), "direction": "up", "weight": 60},
+                ],
+                "time_curve": build_time_curve(base_bad, max_bad),
+            }
+
+            results.append({"patient": patient, "prediction": prediction})
+
+    return results
