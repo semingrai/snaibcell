@@ -61,13 +61,15 @@ Brain tolerance · Oxygen/metabolic tolerance · Imaging/clot burden · Hemodyna
 ```
 -snaibcell/
 ├── backend/
-│   ├── snaibcell.py        # Regressor training + prediction
-│   ├── data_cleaning.ipynb # Feature engineering + classifier
 │   ├── featherless.py      # AI clinical summarizer
 │   ├── server.py           # Flask API
 │   └── test_data.py        # Mock profiles for frontend dev
-└── frontend/
-    └── src/components/     # React dashboard
+├── frontend/
+│   └── src/components/     # React dashboard
+├── data_cleaning.ipynb     # Feature engineering + classifier
+├── snaibcell.py            # Regressor training + prediction
+├── data_cleaned_version.csv
+└── stroke_thrombectomy_dataset.csv
 ```
 
 ---
