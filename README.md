@@ -50,10 +50,10 @@ Brain tolerance · Oxygen/metabolic tolerance · Imaging/clot burden · Hemodyna
 | Component | Technology |
 |-----------|------------|
 | ML | XGBoost, scikit-learn |
-| API | Flask |
+| API | FastAPI |
 | AI Summarizer | Featherless.AI — OpenBioLLM-70B |
 | Deployment | Vultr VPS |
-| Frontend | React + Vite + Tailwind |
+| Frontend | React + Vite + TypeScript + Tailwind + Recharts |
 
 ---
 
