@@ -82,7 +82,7 @@ print(f"[snaibcell] Model saved → {_model_save_path}")
 
 # ── 2. Predict from upload ────────────────────────────────────────────────────
 # FILE FROM THE WEB
-patient_df = pd.read_csv()
+patient_df = pd.read_csv('testing_data/red_patient.csv')
 X_input    = patient_df.reindex(columns=FEATURES)
 predicted  = model.predict(X_input)
 safe       = np.maximum(predicted - 20, 10)
